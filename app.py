@@ -7,7 +7,7 @@ st.set_page_config(page_title="Student Presentation Booking", page_icon="📅", 
 
 CSV_FILE = "bookings.csv"
 
-# Function to initialize or load bookings from CSV
+# Function to initialize or load bookings from CSV (ignoring blank rows)
 def load_bookings_and_students():
     bookings_dict = {}
     registered_student_numbers = set()
@@ -17,22 +17,24 @@ def load_bookings_and_students():
             df = pd.read_csv(CSV_FILE)
             for _, row in df.iterrows():
                 slot = row.get("Time Slot")
-                if not slot:
+                leader_name = row.get("Leader Name", "")
+                
+                # Skip if slot or leader name is missing/empty/nan
+                if not slot or pd.isna(leader_name) or str(leader_name).strip() == "" or str(leader_name).lower() == "nan":
                     continue
                 
-                leader_name = str(row.get("Leader Name", ""))
+                leader_name = str(leader_name).strip()
                 leader_num = str(row.get("Leader Student Number", ""))
                 
-                # Collect student numbers to prevent duplicate bookings
                 if leader_num and leader_num.lower() != "nan":
                     registered_student_numbers.add(leader_num.strip())
                 
                 members = []
-                for i in range(1, 5):
+                for i in range(1, 4):
                     m_name = row.get(f"Member {i} Name", "")
                     m_num = row.get(f"Member {i} Student Number", "")
-                    if pd.notna(m_name) and str(m_name).strip():
-                        members.append({"name": str(m_name), "number": str(m_num)})
+                    if pd.notna(m_name) and str(m_name).strip() and str(m_name).lower() != "nan":
+                        members.append({"name": str(m_name).strip(), "number": str(m_num).strip()})
                         if pd.notna(m_num) and str(m_num).lower() != "nan":
                             registered_student_numbers.add(str(m_num).strip())
                 
@@ -118,17 +120,14 @@ with st.form("booking_form"):
     submit_button = st.form_submit_button("Confirm Booking")
     
     if submit_button:
-        # Clean inputs
         l_name = leader_name.strip()
         l_num = leader_num.strip()
         
-        # Collect all current form student numbers and names
         current_members = []
         for name_val, num_val in [(m1_name, m1_num), (m2_name, m2_num), (m3_name, m3_num)]:
             if name_val.strip() or num_val.strip():
                 current_members.append({"name": name_val.strip(), "number": num_val.strip()})
         
-        # Validation checks
         all_student_nums = [l_num] + [m["number"] for m in current_members if m["number"]]
         
         duplicate_found = False
@@ -146,19 +145,16 @@ with st.form("booking_form"):
         elif not available_slots:
             st.error("All slots have been booked!")
         else:
-            # Save booking to session state
             st.session_state.bookings[selected_slot] = {
                 "leader_name": l_name,
                 "leader_num": l_num,
                 "members": current_members
             }
             
-            # Add to tracked student numbers
             for num in all_student_nums:
                 if num:
                     st.session_state.registered_students.add(num)
             
-            # Prepare row data with separate columns for names and student numbers
             row_data = {
                 "Time Slot": selected_slot,
                 "Leader Name": l_name,
@@ -177,7 +173,6 @@ with st.form("booking_form"):
             if os.path.exists(CSV_FILE):
                 try:
                     existing_df = pd.read_csv(CSV_FILE)
-                    # If old schema exists, overwrite, else append
                     if "Leader Student Number" not in existing_df.columns:
                         new_df.to_csv(CSV_FILE, mode='w', header=True, index=False)
                     else:
