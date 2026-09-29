@@ -1,10 +1,32 @@
 import streamlit as st
+import pandas as pd
+import os
+from datetime import datetime
 
 st.set_page_config(page_title="Student Presentation Booking", page_icon="📅", layout="centered")
 
-# Initialize session state to keep track of bookings
+CSV_FILE = "bookings.csv"
+
+# Function to initialize or load bookings from CSV
+def load_bookings():
+    if os.path.exists(CSV_FILE):
+        try:
+            df = pd.read_csv(CSV_FILE)
+            # Convert dataframe to dictionary format: { "Slot": {"leader": ..., "members": ...} }
+            bookings_dict = {}
+            for _, row in df.iterrows():
+                bookings_dict[row["Time Slot"]] = {
+                    "leader": row["Group Leader"],
+                    "members": row["Members & Student Numbers"]
+                }
+            return bookings_dict
+        except Exception:
+            return {}
+    return {}
+
+# Initialize session state bookings from CSV file
 if "bookings" not in st.session_state:
-    st.session_state.bookings = {}  # Format: { "Day - Slot": "Group Name" }
+    st.session_state.bookings = load_bookings()
 
 # Define available slots based on the timetable
 THURSDAY_SLOTS = [
@@ -26,12 +48,37 @@ FRIDAY_SLOTS = [
 
 ALL_SLOTS = THURSDAY_SLOTS + FRIDAY_SLOTS
 
+# --- SIDEBAR: ADMIN DOWNLOAD PANEL ---
+st.sidebar.subheader("🔒 Admin Panel")
+admin_password_input = st.sidebar.text_input("Admin Password", type="password")
+
+# Retrieve admin password safely from st.secrets
+admin_password_secret = st.secrets.get("admin_password", "changeme123")
+
+if admin_password_input:
+    if admin_password_input == admin_password_secret:
+        st.sidebar.success("Access Granted")
+        if os.path.exists(CSV_FILE):
+            with open(CSV_FILE, "rb") as f:
+                st.sidebar.download_button(
+                    label="📥 Download Bookings CSV",
+                    data=f,
+                    file_name="presentation_bookings.csv",
+                    mime="text/csv"
+                )
+        else:
+            st.sidebar.info("No bookings recorded yet.")
+    else:
+        st.sidebar.error("Incorrect password.")
+
+# --- MAIN APP INTERFACE ---
 st.title("🎓 Student Presentation Booking System")
-st.markdown("Select an available 15-minute time slot for your group presentation. Slots are updated in real-time.")
+st.markdown("Select an available 15-minute time slot for your group presentation. Only the **Group Leader's name** will appear publicly on the schedule.")
 
 with st.form("booking_form"):
     st.subheader("Book Your Slot")
-    group_name = st.text_input("Group Name / Student Names", placeholder="e.g., Group 4 (Alice, Bob)")
+    group_leader = st.text_input("Group Leader Name", placeholder="e.g., Alice Smith")
+    members_info = st.text_area("Group Members & Student Numbers", placeholder="e.g.\n1. Alice Smith - 21900123\n2. Bob Jones - 21900456")
     
     # Filter out already booked slots
     available_slots = [slot for slot in ALL_SLOTS if slot not in st.session_state.bookings]
@@ -41,26 +88,47 @@ with st.form("booking_form"):
     submit_button = st.form_submit_button("Confirm Booking")
     
     if submit_button:
-        if not group_name.strip():
-            st.error("Please enter your group name or student names.")
+        if not group_leader.strip():
+            st.error("Please enter the Group Leader's name.")
+        elif not members_info.strip():
+            st.error("Please enter group member names and student numbers.")
         elif not available_slots:
             st.error("All slots have been booked!")
         else:
-            st.session_state.bookings[selected_slot] = group_name.strip()
-            st.success(f"Success! {group_name.strip()} is booked for {selected_slot}.")
+            # Save to session state
+            st.session_state.bookings[selected_slot] = {
+                "leader": group_leader.strip(),
+                "members": members_info.strip()
+            }
+            
+            # Save/Append to CSV file in repo directory
+            file_exists = os.path.exists(CSV_FILE)
+            new_data = pd.DataFrame([{
+                "Time Slot": selected_slot,
+                "Group Leader": group_leader.strip(),
+                "Members & Student Numbers": members_info.strip(),
+                "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+            }])
+            
+            if file_exists:
+                new_data.to_csv(CSV_FILE, mode='a', header=False, index=False)
+            else:
+                new_data.to_csv(CSV_FILE, mode='w', header=True, index=False)
+                
+            st.success(f"Success! Booked for {selected_slot} under group leader {group_leader.strip()}.")
             st.rerun()
 
 st.markdown("---")
 st.subheader("📋 Current Booking Schedule")
 
 if st.session_state.bookings:
-    # Format bookings for display
-    booking_data = [{"Time Slot": slot, "Booked By Group": group} for slot, group in sorted(st.session_state.bookings.items())]
+    # Format public bookings for display (showing ONLY the group leader's name)
+    booking_data = [{"Time Slot": slot, "Group Leader": info["leader"]} for slot, info in sorted(st.session_state.bookings.items())]
     st.table(booking_data)
 else:
     st.info("No bookings made yet. Be the first to pick a slot!")
 
-# --- 5. FOOTER ---
+# --- FOOTER ---
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; font-family: monospace; color: #888888; font-size: 0.85rem; letter-spacing: 1px;'>Crafted by Thendo Ravele</div>",
