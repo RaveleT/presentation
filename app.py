@@ -100,7 +100,7 @@ st.markdown("Select an available 15-minute time slot. Only the **Group Leader's 
 with st.form("booking_form"):
     st.subheader("Group Leader Details")
     leader_name = st.text_input("Group Leader Full Name", placeholder="e.g., Thendo Ravele")
-    leader_num = st.text_input("Group Leader Student Number", placeholder="e.g., 2#######")
+    leader_num = st.text_input("Group Leader Student Number", placeholder=" ")
     
     st.subheader("Group Members Details (Optional)")
     col1, col2 = st.columns(2)
