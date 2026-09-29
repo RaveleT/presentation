@@ -59,3 +59,10 @@ if st.session_state.bookings:
     st.table(booking_data)
 else:
     st.info("No bookings made yet. Be the first to pick a slot!")
+
+# --- 5. FOOTER ---
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; font-family: monospace; color: #888888; font-size: 0.85rem; letter-spacing: 1px;'>Crafted by Thendo Ravele</div>",
+    unsafe_allow_html=True,
+)
