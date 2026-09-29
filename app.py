@@ -1,6 +1,7 @@
 import streamlit as st
 import pandas as pd
 import os
+import io
 from datetime import datetime
 
 st.set_page_config(page_title="Student Presentation Booking", page_icon="📅", layout="centered")
@@ -81,6 +82,7 @@ if admin_password_input:
     if admin_password_input == admin_password_secret:
         st.sidebar.success("Access Granted")
         if os.path.exists(CSV_FILE):
+            # 1. Download Detailed CSV Button
             with open(CSV_FILE, "rb") as f:
                 st.sidebar.download_button(
                     label="📥 Download Detailed CSV",
@@ -88,19 +90,66 @@ if admin_password_input:
                     file_name="presentation_bookings_detailed.csv",
                     mime="text/csv"
                 )
+            
+            # 2. Download Cleaned Excel (.xlsx) Button
+            try:
+                df_raw = pd.read_csv(CSV_FILE)
+                clean_rows = []
+                for _, row in df_raw.iterrows():
+                    slot = row.get("Time Slot")
+                    l_name = row.get("Leader Name", "")
+                    l_num = row.get("Leader Student Number", "")
+                    
+                    if not slot or pd.isna(l_name) or str(l_name).strip() == "" or str(l_name).lower() == "nan":
+                        continue
+                    
+                    names_list = [str(l_name).strip()]
+                    nums_list = [str(l_num).strip()] if pd.notna(l_num) and str(l_num).lower() != "nan" else [""]
+                    
+                    for i in range(1, 4):
+                        m_name = row.get(f"Member {i} Name", "")
+                        m_num = row.get(f"Member {i} Student Number", "")
+                        if pd.notna(m_name) and str(m_name).strip() and str(m_name).lower() != "nan":
+                            names_list.append(str(m_name).strip())
+                        if pd.notna(m_num) and str(m_num).strip() and str(m_num).lower() != "nan":
+                            nums_list.append(str(m_num).strip())
+                            
+                    clean_rows.append({
+                        "Time Slot": slot,
+                        "Group Leader": str(l_name).strip(),
+                        "Members": ", ".join(names_list),
+                        "Student Numbers": ", ".join(nums_list)
+                    })
+                
+                df_clean = pd.DataFrame(clean_rows)
+                
+                # Write to Excel in memory using openpyxl
+                output = io.BytesIO()
+                with pd.ExcelWriter(output, engine='openpyxl') as writer:
+                    df_clean.to_excel(writer, index=False, sheet_name="Bookings")
+                excel_data = output.getvalue()
+                
+                st.sidebar.download_button(
+                    label="📊 Download Cleaned Excel (.xlsx)",
+                    data=excel_data,
+                    file_name="cleaned_presentation_bookings.xlsx",
+                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                )
+            except Exception as e:
+                st.sidebar.error(f"Error generating Excel file: {e}")
         else:
             st.sidebar.info("No bookings recorded yet.")
     else:
         st.sidebar.error("Incorrect password.")
 
 # --- MAIN APP INTERFACE ---
-st.title("🎓Presentation Booking")
+st.title("🎓 Presentation Booking")
 st.markdown("Select an available 15-minute time slot. Only the **Group Leader's name** will appear publicly on the schedule.")
 
 with st.form("booking_form"):
     st.subheader("Group Leader Details")
     leader_name = st.text_input("Group Leader Full Name", placeholder="e.g., Thendo Ravele")
-    leader_num = st.text_input("Group Leader Student Number", placeholder=" ")
+    leader_num = st.text_input("Group Leader Student Number", placeholder="e.g., 21900123")
     
     st.subheader("Group Members Details (Optional)")
     col1, col2 = st.columns(2)
