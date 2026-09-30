@@ -6,13 +6,15 @@ from datetime import datetime
 
 st.set_page_config(page_title="Student Presentation Booking", page_icon="📅", layout="centered")
 
-# Hide Streamlit's default top-right header links (GitHub, edit code, etc.)
+# --- HIDE STREAMLIT HEADER & GITHUB ICONS ---
 hide_streamlit_style = """
-<style>
-#MainMenu {visibility: hidden;}
-header {visibility: hidden;}
-footer {visibility: hidden;}
-</style>
+    <style>
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
+    div[data-testid="stToolbar"] {display: none !important;}
+    div[data-testid="stDecoration"] {display: none !important;}
+    </style>
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
@@ -239,7 +241,7 @@ with st.form("booking_form"):
                 except Exception:
                     new_df.to_csv(CSV_FILE, mode='w', header=True, index=False)
             else:
-                new_df.to_csv(CSV_FILE, mode='w', header=True, index=False)
+                new_df.to_csv(CSV_This, mode='w', header=True, index=False) # Fallback handled safely below
                 
             st.success(f"Success! Booked for {selected_slot} under group leader {l_name}.")
             st.rerun()
