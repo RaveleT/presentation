@@ -6,6 +6,16 @@ from datetime import datetime
 
 st.set_page_config(page_title="Student Presentation Booking", page_icon="📅", layout="centered")
 
+# Hide Streamlit's default top-right header links (GitHub, edit code, etc.)
+hide_streamlit_style = """
+<style>
+#MainMenu {visibility: hidden;}
+header {visibility: hidden;}
+footer {visibility: hidden;}
+</style>
+"""
+st.markdown(hide_streamlit_style, unsafe_allow_html=True)
+
 CSV_FILE = "bookings.csv"
 
 # Function to initialize or load bookings from CSV (ignoring blank rows)
