@@ -160,18 +160,30 @@ st.markdown("Select an available 15-minute time slot. Only the **Group Leader's 
 
 with st.form("booking_form"):
     st.subheader("Group Leader Details")
-    leader_name = st.text_input("Group Leader Full Name", placeholder="e.g., Ravele Thendo")
-    leader_num = st.text_input("Group Leader Student Number", placeholder=" ")
+    col_l1, col_l2 = st.columns(2)
+    with col_l1:
+        leader_name = st.text_input("Group Leader Full Name", placeholder="e.g., Ravele Thendo")
+    with col_l2:
+        leader_num = st.text_input("Group Leader Student Number", placeholder="e.g., 21900123")
     
-    st.subheader("Group Members Details")
-    col1, col2 = st.columns(2)
-    with col1:
+    st.subheader("Group Members Details (Optional)")
+    
+    col_m1_1, col_m1_2 = st.columns(2)
+    with col_m1_1:
         m1_name = st.text_input("Member 1 Name")
-        m2_name = st.text_input("Member 2 Name")
-        m3_name = st.text_input("Member 3 Name")
-    with col2:
+    with col_m1_2:
         m1_num = st.text_input("Member 1 Student Number")
+        
+    col_m2_1, col_m2_2 = st.columns(2)
+    with col_m2_1:
+        m2_name = st.text_input("Member 2 Name")
+    with col_m2_2:
         m2_num = st.text_input("Member 2 Student Number")
+        
+    col_m3_1, col_m3_2 = st.columns(2)
+    with col_m3_1:
+        m3_name = st.text_input("Member 3 Name")
+    with col_m3_2:
         m3_num = st.text_input("Member 3 Student Number")
     
     # Filter out already booked slots
@@ -241,7 +253,7 @@ with st.form("booking_form"):
                 except Exception:
                     new_df.to_csv(CSV_FILE, mode='w', header=True, index=False)
             else:
-                new_df.to_csv(CSV_This, mode='w', header=True, index=False) # Fallback handled safely below
+                new_df.to_csv(CSV_FILE, mode='w', header=True, index=False)
                 
             st.success(f"Success! Booked for {selected_slot} under group leader {l_name}.")
             st.rerun()
