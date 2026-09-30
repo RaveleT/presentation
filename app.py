@@ -166,7 +166,7 @@ with st.form("booking_form"):
     with col_l2:
         leader_num = st.text_input("Group Leader Student Number", placeholder="")
     
-    st.subheader("Group Members Details (Optional)")
+    st.subheader("Group Members Details")
     
     col_m1_1, col_m1_2 = st.columns(2)
     with col_m1_1:
