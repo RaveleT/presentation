@@ -32,13 +32,13 @@ def load_registered_students():
     try:
       df = pd.read_csv(CSV_FILE)
       for _, row in df.iterrows():
-        day = row.get("Day", "")
-        time_slot = row.get("Time Slot", "")
-        leader = row.get("Group Leader", "")
-        name = row.get("Student Name", "")
-        num = row.get("Student Number", "")
+        day = str(row.get("Day", "")).strip()
+        time_slot = str(row.get("Time Slot", "")).strip()
+        leader = str(row.get("Group Leader", "")).strip()
+        name = str(row.get("Student Name", "")).strip()
+        num = str(row.get("Student Number", "")).strip()
 
-        if not time_slot or pd.isna(name) or str(name).strip() == "":
+        if not time_slot or pd.isna(name) or name == "" or name.lower() == "nan":
           continue
 
         full_slot = f"{day}: {time_slot}" if day else time_slot
@@ -49,13 +49,13 @@ def load_registered_students():
               "members": [],
           }
 
-        if str(name).strip() != str(leader).strip():
+        if name != leader:
           bookings_dict[full_slot]["members"].append(
-              {"name": str(name).strip(), "number": str(num).strip()}
+              {"name": name, "number": num}
           )
 
-        if pd.notna(num) and str(num).strip() and str(num).lower() != "nan":
-          registered_student_numbers.add(str(num).strip())
+        if num and num.lower() != "nan" and num != "N/A":
+          registered_student_numbers.add(num)
     except Exception:
       pass
 
@@ -123,7 +123,7 @@ if admin_password_input:
         st.sidebar.download_button(
             label="📥 Download Cleaned CSV",
             data=f,
-            file_name="flattened_presentation_bookings.csv",
+            file_name="bookings_cleaned.csv",
             mime="text/csv",
         )
 
@@ -187,10 +187,12 @@ with st.form("booking_form"):
   with col_m3_2:
     m3_num = st.text_input("Member 3 Student Number")
 
-  # Filter out already booked slots
+  # Extract booked slot full strings (e.g., "Thursday: 10:00 - 10:15")
+  booked_full_slots = list(st.session_state.bookings.keys())
   available_slots = [
-      slot for slot in ALL_SLOTS if slot not in st.session_state.bookings
+      slot for slot in ALL_SLOTS if slot not in booked_full_slots
   ]
+
   selected_slot = st.selectbox(
       "Choose an Available Time Slot",
       available_slots if available_slots else ["No slots available!"],
@@ -244,7 +246,7 @@ with st.form("booking_form"):
       }
 
       for num in all_student_nums:
-        if num:
+        if num and num != "N/A":
           st.session_state.registered_students.add(num)
 
       # Build new rows for the flattened format
@@ -266,7 +268,7 @@ with st.form("booking_form"):
             "Time Slot": time_part,
             "Group Leader": l_name,
             "Student Name": m["name"],
-            "Student Number": m["number"],
+            "Student Number": m["number"] if m["number"] else "N/A",
         })
 
       new_df = pd.DataFrame(new_rows)
@@ -302,13 +304,41 @@ with st.form("booking_form"):
 st.markdown("---")
 st.subheader("📋 Current Booking Schedule")
 
-if st.session_state.bookings:
-  booking_data = []
-  for slot, info in sorted(st.session_state.bookings.items()):
-    booking_data.append(
-        {"Time Slot": slot, "Group Leader": info.get("leader_name", "")}
-    )
-  st.table(booking_data)
+if os.path.exists(CSV_FILE):
+  try:
+    df_schedule = pd.read_csv(CSV_FILE)
+    if not df_schedule.empty:
+      # Extract unique slots with their corresponding group leaders
+      schedule_summary = []
+      for (day, time_slot), group in df_schedule.groupby(
+          ["Day", "Time Slot"]
+      ):
+        leader = group["Group Leader"].iloc[0]
+        schedule_summary.append({
+            "Day": day,
+            "Time Slot": time_slot,
+            "Group Leader": leader,
+        })
+
+      df_summary = pd.DataFrame(schedule_summary)
+
+      # Sort chronologically by day and start time
+      day_order = {"Thursday": 1, "Friday": 2}
+      df_summary["Day_Order"] = df_summary["Day"].map(day_order).fillna(3)
+      df_summary["Start_Time"] = df_summary["Time Slot"].apply(
+          lambda x: x.split(" - ")[0] if " - " in str(x) else str(x)
+      )
+      df_summary = (
+          df_summary.sort_values(by=["Day_Order", "Start_Time"])
+          .drop(columns=["Day_Order", "Start_Time"])
+          .reset_index(drop=True)
+      )
+
+      st.table(df_summary[["Day", "Time Slot", "Group Leader"]])
+    else:
+      st.info("No bookings made yet. Be the first to pick a slot!")
+  except Exception:
+    st.info("No bookings made yet. Be the first to pick a slot!")
 else:
   st.info("No bookings made yet. Be the first to pick a slot!")
 
