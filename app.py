@@ -20,56 +20,42 @@ hide_streamlit_style = """
 """
 st.markdown(hide_streamlit_style, unsafe_allow_html=True)
 
-CSV_FILE = "bookings.csv"
+CSV_FILE = "bookings_cleaned.csv"
 
 
-# Function to initialize or load bookings from CSV (ignoring blank rows)
-def load_bookings_and_students():
-  bookings_dict = {}
+# Function to initialize or load registered students from the clean CSV
+def load_registered_students():
   registered_student_numbers = set()
+  bookings_dict = {}
 
   if os.path.exists(CSV_FILE):
     try:
       df = pd.read_csv(CSV_FILE)
       for _, row in df.iterrows():
-        slot = row.get("Time Slot")
-        leader_name = row.get("Leader Name", "")
+        day = row.get("Day", "")
+        time_slot = row.get("Time Slot", "")
+        leader = row.get("Group Leader", "")
+        name = row.get("Student Name", "")
+        num = row.get("Student Number", "")
 
-        # Skip if slot or leader name is missing/empty/nan
-        if (
-            not slot
-            or pd.isna(leader_name)
-            or str(leader_name).strip() == ""
-            or str(leader_name).lower() == "nan"
-        ):
+        if not time_slot or pd.isna(name) or str(name).strip() == "":
           continue
 
-        leader_name = str(leader_name).strip()
-        leader_num = str(row.get("Leader Student Number", ""))
+        full_slot = f"{day}: {time_slot}" if day else time_slot
 
-        if leader_num and leader_num.lower() != "nan":
-          registered_student_numbers.add(leader_num.strip())
+        if full_slot not in bookings_dict:
+          bookings_dict[full_slot] = {
+              "leader_name": leader,
+              "members": [],
+          }
 
-        members = []
-        for i in range(1, 4):
-          m_name = row.get(f"Member {i} Name", "")
-          m_num = row.get(f"Member {i} Student Number", "")
-          if (
-              pd.notna(m_name)
-              and str(m_name).strip()
-              and str(m_name).lower() != "nan"
-          ):
-            members.append(
-                {"name": str(m_name).strip(), "number": str(m_num).strip()}
-            )
-            if pd.notna(m_num) and str(m_num).lower() != "nan":
-              registered_student_numbers.add(str(m_num).strip())
+        if str(name).strip() != str(leader).strip():
+          bookings_dict[full_slot]["members"].append(
+              {"name": str(name).strip(), "number": str(num).strip()}
+          )
 
-        bookings_dict[slot] = {
-            "leader_name": leader_name,
-            "leader_num": leader_num,
-            "members": members,
-        }
+        if pd.notna(num) and str(num).strip() and str(num).lower() != "nan":
+          registered_student_numbers.add(str(num).strip())
     except Exception:
       pass
 
@@ -79,7 +65,7 @@ def load_bookings_and_students():
 # Initialize session state from CSV file
 if "bookings" not in st.session_state:
   st.session_state.bookings, st.session_state.registered_students = (
-      load_bookings_and_students()
+      load_registered_students()
   )
 
 # Define available slots based on the timetable
@@ -132,93 +118,25 @@ if admin_password_input:
   if admin_password_input == admin_password_secret:
     st.sidebar.success("Access Granted")
     if os.path.exists(CSV_FILE):
-      # 1. Download Detailed CSV Button
+      # 1. Download Cleaned CSV Button
       with open(CSV_FILE, "rb") as f:
         st.sidebar.download_button(
-            label="📥 Download Detailed CSV",
+            label="📥 Download Cleaned CSV",
             data=f,
-            file_name="presentation_bookings_detailed.csv",
+            file_name="flattened_presentation_bookings.csv",
             mime="text/csv",
         )
 
-      # 2. Download Flattened Chronological Excel (.xlsx) Button
+      # 2. Download Cleaned Excel (.xlsx) Button
       try:
-        df_raw = pd.read_csv(CSV_FILE)
-        clean_rows = []
-        for _, row in df_raw.iterrows():
-          slot = row.get("Time Slot")
-          l_name = row.get("Leader Name", "")
-          l_num = row.get("Leader Student Number", "")
-
-          if (
-              not slot
-              or pd.isna(l_name)
-              or str(l_name).strip() == ""
-              or str(l_name).lower() == "nan"
-          ):
-            continue
-
-          # Parse Day and Time Slot string (e.g., "Thursday: 10:00 - 10:15")
-          parts = str(slot).split(": ")
-          day = parts[0].strip() if len(parts) > 0 else ""
-          time_val = ": ".join(parts[1:]).strip() if len(parts) > 1 else slot
-
-          # Add Leader as a student row
-          clean_rows.append({
-              "Day": day,
-              "Time Slot": time_val,
-              "Group Leader": str(l_name).strip(),
-              "Student Name": str(l_name).strip(),
-              "Student Number": (
-                  str(l_num).strip()
-                  if pd.notna(l_num) and str(l_num).lower() != "nan"
-                  else ""
-              ),
-          })
-
-          # Add Group Members as individual student rows
-          for i in range(1, 4):
-            m_name = row.get(f"Member {i} Name", "")
-            m_num = row.get(f"Member {i} Student Number", "")
-            if (
-                pd.notna(m_name)
-                and str(m_name).strip()
-                and str(m_name).lower() != "nan"
-            ):
-              clean_rows.append({
-                  "Day": day,
-                  "Time Slot": time_val,
-                  "Group Leader": str(l_name).strip(),
-                  "Student Name": str(m_name).strip(),
-                  "Student Number": (
-                      str(m_num).strip()
-                      if pd.notna(m_num) and str(m_num).lower() != "nan"
-                      else ""
-                  ),
-              })
-
-        df_clean = pd.DataFrame(clean_rows)
-
-        # Sort chronologically by day and start time
-        day_order = {"Thursday": 1, "Friday": 2}
-        df_clean["Day_Order"] = df_clean["Day"].map(day_order).fillna(3)
-        df_clean["Start_Time"] = df_clean["Time Slot"].apply(
-            lambda x: x.split(" - ")[0] if " - " in str(x) else str(x)
-        )
-        df_clean = (
-            df_clean.sort_values(by=["Day_Order", "Start_Time"])
-            .drop(columns=["Day_Order", "Start_Time"])
-            .reset_index(drop=True)
-        )
-
-        # Write to Excel in memory using openpyxl
+        df_clean = pd.read_csv(CSV_FILE)
         output = io.BytesIO()
         with pd.ExcelWriter(output, engine="openpyxl") as writer:
           df_clean.to_excel(writer, index=False, sheet_name="Bookings")
         excel_data = output.getvalue()
 
         st.sidebar.download_button(
-            label="📊 Download Flattened Excel (.xlsx)",
+            label="📊 Download Cleaned Excel (.xlsx)",
             data=excel_data,
             file_name="flattened_presentation_bookings_chronological.xlsx",
             mime=(
@@ -322,7 +240,6 @@ with st.form("booking_form"):
     else:
       st.session_state.bookings[selected_slot] = {
           "leader_name": l_name,
-          "leader_num": l_num,
           "members": current_members,
       }
 
@@ -330,44 +247,52 @@ with st.form("booking_form"):
         if num:
           st.session_state.registered_students.add(num)
 
-      row_data = {
-          "Time Slot": selected_slot,
-          "Leader Name": l_name,
-          "Leader Student Number": l_num,
-          "Member 1 Name": (
-              current_members[0]["name"] if len(current_members) > 0 else ""
-          ),
-          "Member 1 Student Number": (
-              current_members[0]["number"] if len(current_members) > 0 else ""
-          ),
-          "Member 2 Name": (
-              current_members[1]["name"] if len(current_members) > 1 else ""
-          ),
-          "Member 2 Student Number": (
-              current_members[1]["number"] if len(current_members) > 1 else ""
-          ),
-          "Member 3 Name": (
-              current_members[2]["name"] if len(current_members) > 2 else ""
-          ),
-          "Member 3 Student Number": (
-              current_members[2]["number"] if len(current_members) > 2 else ""
-          ),
-          "Timestamp": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-      }
+      # Build new rows for the flattened format
+      parts = selected_slot.split(": ")
+      day = parts[0].strip()
+      time_part = ": ".join(parts[1:]).strip()
 
-      new_df = pd.DataFrame([row_data])
+      new_rows = [{
+          "Day": day,
+          "Time Slot": time_part,
+          "Group Leader": l_name,
+          "Student Name": l_name,
+          "Student Number": l_num,
+      }]
+
+      for m in current_members:
+        new_rows.append({
+            "Day": day,
+            "Time Slot": time_part,
+            "Group Leader": l_name,
+            "Student Name": m["name"],
+            "Student Number": m["number"],
+        })
+
+      new_df = pd.DataFrame(new_rows)
 
       if os.path.exists(CSV_FILE):
         try:
           existing_df = pd.read_csv(CSV_FILE)
-          if "Leader Student Number" not in existing_df.columns:
-            new_df.to_csv(CSV_FILE, mode="w", header=True, index=False)
-          else:
-            new_df.to_csv(CSV_FILE, mode="a", header=False, index=False)
+          combined_df = pd.concat([existing_df, new_df], ignore_index=True)
         except Exception:
-          new_df.to_csv(CSV_FILE, mode="w", header=True, index=False)
+          combined_df = new_df
       else:
-        new_df.to_csv(CSV_FILE, mode="w", header=True, index=False)
+        combined_df = new_df
+
+      # Sort chronologically by day and start time
+      day_order = {"Thursday": 1, "Friday": 2}
+      combined_df["Day_Order"] = combined_df["Day"].map(day_order).fillna(3)
+      combined_df["Start_Time"] = combined_df["Time Slot"].apply(
+          lambda x: x.split(" - ")[0] if " - " in str(x) else str(x)
+      )
+      combined_df = (
+          combined_df.sort_values(by=["Day_Order", "Start_Time"])
+          .drop(columns=["Day_Order", "Start_Time"])
+          .reset_index(drop=True)
+      )
+
+      combined_df.to_csv(CSV_FILE, index=False)
 
       st.success(
           f"Success! Booked for {selected_slot} under group leader {l_name}."
